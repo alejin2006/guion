@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import "../styles/Dashboard.css";
 
 import Inicio      from "./Inicio";
@@ -30,7 +30,32 @@ const activity = [
   { i:"SJ", name:"Santiago Jiménez", t:"1 hora", txt:"Propuso cambio de final en El Caso Miró."   },
 ];
 
-export default function Dashboard({ onLogout }) {
+const NOTIFICATIONS = [
+  { id:1, i:"LP", txt:"Lisa Pérez modificó el diálogo de la escena 2.", t:"5 min",  read:false },
+  { id:2, i:"AR", txt:"Andrés Rojas añadió el personaje Tomás.",        t:"30 min", read:false },
+  { id:3, i:"SJ", txt:"Santiago propuso un nuevo final.",               t:"1 hora", read:true  },
+  { id:4, i:"LP", txt:"Lisa Pérez dejó un comentario en la escena 1.",  t:"2 horas",read:true  },
+];
+
+const ALL_ITEMS = [
+  { type:"Proyecto",  label:"La Última Ciudad",           nav:"Proyectos"  },
+  { type:"Proyecto",  label:"El Caso Miró",               nav:"Proyectos"  },
+  { type:"Escena",    label:"Escena 1 - El despertar",    nav:"Escenas"    },
+  { type:"Escena",    label:"Escena 2 - La confrontación",nav:"Escenas"    },
+  { type:"Personaje", label:"Tomás",                      nav:"Personajes" },
+  { type:"Personaje", label:"Elena Miró",                 nav:"Personajes" },
+  { type:"Personaje", label:"Detective Ruiz",             nav:"Personajes" },
+];
+
+function useOutsideClick(ref, callback) {
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) callback(); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ref, callback]);
+}
+
+export default function Dashboard({ onLogout, usuario }) {
   const [nav,      setNav]      = useState("Inicio");
   const [edKey,    setEdKey]    = useState(0);
   const [edData,   setEdData]   = useState(null);
@@ -41,7 +66,74 @@ export default function Dashboard({ onLogout }) {
   const [invFlash, setInvFlash] = useState(false);
   const [invErr,   setInvErr]   = useState("");
 
-  const openEditor  = (title, template) => { setEdKey(k => k+1); setEdData({ title: title||"Sin título", template: template||null }); };
+  // 🔔 Notificaciones
+  const [notifs,     setNotifs]     = useState(NOTIFICATIONS);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const notifsRef = useRef(null);
+  useOutsideClick(notifsRef, () => setShowNotifs(false));
+  const unreadCount = notifs.filter(n => !n.read).length;
+  const markAllRead = () => setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+
+  // 🔍 Búsqueda
+  const [showSearch, setShowSearch] = useState(false);
+  const [query,      setQuery]      = useState("");
+  const searchRef   = useRef(null);
+  const searchInput = useRef(null);
+  useOutsideClick(searchRef, () => { setShowSearch(false); setQuery(""); });
+  const results = query.trim().length > 0
+    ? ALL_ITEMS.filter(i => i.label.toLowerCase().includes(query.toLowerCase()))
+    : [];
+  const openSearch = () => { setShowSearch(true); setTimeout(() => searchInput.current?.focus(), 50); };
+
+  // 👤 Avatar
+  const [showAvatar, setShowAvatar] = useState(false);
+  const avatarRef = useRef(null);
+  useOutsideClick(avatarRef, () => setShowAvatar(false));
+  const iniciales = usuario?.nombre ? usuario.nombre.slice(0,2).toUpperCase() : "??";
+
+  // 👤 Modal Mi Perfil
+  const [showPerfil, setShowPerfil] = useState(false);
+  const [perfilData, setPerfilData] = useState({
+    nombre:    usuario?.nombre || "",
+    email:     usuario?.email  || "",
+    rol:       "Director",
+    bio:       "Apasionado por el cine y la narrativa visual.",
+    password:  "",
+    password2: "",
+  });
+  const [perfilFlash, setPerfilFlash] = useState("");
+  const [perfilErr,   setPerfilErr]   = useState("");
+
+  const savePerfil = () => {
+    if (!perfilData.nombre.trim()) { setPerfilErr("El nombre es obligatorio."); return; }
+    if (perfilData.password && perfilData.password !== perfilData.password2) {
+      setPerfilErr("Las contraseñas no coinciden."); return;
+    }
+    setPerfilErr("");
+    setPerfilFlash("✓ Cambios guardados");
+    setTimeout(() => setPerfilFlash(""), 2000);
+  };
+
+  // ⚙️ Modal Configuración
+  const [showConfig, setShowConfig] = useState(false);
+  const [config, setConfig] = useState({
+    idioma:       "Español",
+    notifEmail:   true,
+    notifPush:    false,
+    autoguardado: true,
+    formatoGuion: "Estándar Hollywood",
+    privacidad:   "Solo equipo",
+  });
+  const [configFlash, setConfigFlash] = useState("");
+  const saveConfig = () => {
+    setConfigFlash("✓ Configuración guardada");
+    setTimeout(() => setConfigFlash(""), 2000);
+  };
+
+  // ❓ Modal Ayuda
+  const [showAyuda, setShowAyuda] = useState(false);
+
+  const openEditor  = (title, template) => { setEdKey(k=>k+1); setEdData({ title: title||"Sin título", template: template||null }); };
   const closeEditor = () => setEdData(null);
   const isEditor    = edData !== null;
 
@@ -57,9 +149,7 @@ export default function Dashboard({ onLogout }) {
   };
 
   const sendInvite = () => {
-    if (!invEmail.trim() || !/\S+@\S+\.\S+/.test(invEmail)) {
-      setInvErr("Ingresa un correo válido."); return;
-    }
+    if (!invEmail.trim() || !/\S+@\S+\.\S+/.test(invEmail)) { setInvErr("Ingresa un correo válido."); return; }
     const initials = invEmail.slice(0,2).toUpperCase();
     setCollabs(prev => [...prev, { id: Date.now(), i: initials, name: invEmail, role: invRole, g: false }]);
     setInvFlash(true); setInvEmail(""); setInvErr("");
@@ -67,6 +157,33 @@ export default function Dashboard({ onLogout }) {
   };
 
   const removeCollab = id => setCollabs(prev => prev.filter(c => c.id !== id));
+
+  // ─── ESTILOS REUTILIZABLES ────────────────────────────────────────────────
+  const modalOverlay = {
+    position:"fixed", inset:0, background:"rgba(0,0,0,0.6)",
+    display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000,
+  };
+  const modalBox = {
+    background:"var(--card-bg,#1a1a2e)", border:"1px solid var(--border,#2a2a3e)",
+    borderRadius:"14px", width:"460px", maxWidth:"95vw", maxHeight:"90vh",
+    overflowY:"auto", boxShadow:"0 16px 48px rgba(0,0,0,0.5)",
+  };
+  const modalHead = {
+    display:"flex", alignItems:"center", justifyContent:"space-between",
+    padding:"18px 22px", borderBottom:"1px solid var(--border,#2a2a3e)",
+  };
+  const modalTitle = { fontWeight:700, fontSize:"16px", color:"var(--text,#e0e0e0)" };
+  const closeBtn   = { background:"none", border:"none", color:"var(--muted,#888)", fontSize:"18px", cursor:"pointer" };
+  const fieldLabel = { fontSize:"11px", color:"var(--muted2,#aaa)", marginBottom:5, display:"block" };
+  const fieldInput = {
+    width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid var(--border,#2a2a3e)",
+    borderRadius:"8px", padding:"9px 12px", color:"var(--text,#e0e0e0)",
+    fontSize:"13px", outline:"none", boxSizing:"border-box",
+  };
+  const toggleRow = {
+    display:"flex", alignItems:"center", justifyContent:"space-between",
+    padding:"10px 0", borderBottom:"1px solid var(--border,#2a2a3e)",
+  };
 
   return (
     <div className="shell" style={{ gridTemplateColumns: isEditor ? "var(--sidebar-w) 1fr" : "var(--sidebar-w) 1fr 300px", height:"100vh" }}>
@@ -78,13 +195,162 @@ export default function Dashboard({ onLogout }) {
           <span className="brand-name">FILMSCRIPT</span>
         </div>
         <div className="topbar-mid">
-          {isEditor ? <strong>EDITOR DE GUION</strong> : <>BIENVENIDO,&nbsp;<strong>SANTIAGO.</strong></>}
+          {isEditor
+            ? <strong>EDITOR DE GUION</strong>
+            : <>BIENVENIDO,&nbsp;<strong>{usuario?.nombre?.toUpperCase() || "USUARIO"}.</strong></>}
         </div>
+
         <div className="topbar-actions">
           {isEditor && <button className="t-icon" onClick={closeEditor} style={{fontWeight:700}}>✕</button>}
-          <div className="t-icon">🔔</div>
-          <div className="t-icon">🔍</div>
-          <div className="avatar">SJ</div>
+
+          {/* 🔔 NOTIFICACIONES */}
+          <div style={{position:"relative"}} ref={notifsRef}>
+            <div className="t-icon" style={{position:"relative",cursor:"pointer"}}
+              onClick={() => { setShowNotifs(p=>!p); setShowSearch(false); setShowAvatar(false); }}>
+              🔔
+              {unreadCount > 0 && (
+                <span style={{
+                  position:"absolute",top:"-4px",right:"-4px",
+                  background:"var(--gold,#c9a84c)",color:"#000",
+                  borderRadius:"50%",fontSize:"10px",fontWeight:700,
+                  width:"16px",height:"16px",display:"flex",
+                  alignItems:"center",justifyContent:"center",
+                }}>{unreadCount}</span>
+              )}
+            </div>
+            {showNotifs && (
+              <div style={{position:"absolute",top:"calc(100% + 10px)",right:0,
+                background:"var(--card-bg,#1a1a2e)",border:"1px solid var(--border,#2a2a3e)",
+                borderRadius:"10px",width:"300px",zIndex:999,boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                  padding:"12px 16px",borderBottom:"1px solid var(--border,#2a2a3e)"}}>
+                  <span style={{fontWeight:700,fontSize:"13px"}}>Notificaciones</span>
+                  {unreadCount > 0 && (
+                    <span style={{fontSize:"11px",color:"var(--gold,#c9a84c)",cursor:"pointer"}}
+                      onClick={markAllRead}>Marcar todas como leídas</span>
+                  )}
+                </div>
+                {notifs.map(n => (
+                  <div key={n.id}
+                    onClick={() => setNotifs(prev => prev.map(x => x.id===n.id ? {...x,read:true} : x))}
+                    style={{display:"flex",gap:"10px",padding:"12px 16px",cursor:"pointer",
+                      background:n.read?"transparent":"rgba(201,168,76,0.06)",
+                      borderBottom:"1px solid var(--border,#2a2a3e)"}}>
+                    <div style={{width:"32px",height:"32px",borderRadius:"50%",
+                      background:"var(--gold,#c9a84c)",color:"#000",
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:"11px",fontWeight:700,flexShrink:0}}>{n.i}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:"12px",color:"var(--text,#e0e0e0)",lineHeight:1.4}}>{n.txt}</div>
+                      <div style={{fontSize:"11px",color:"var(--muted,#888)",marginTop:3}}>{n.t}</div>
+                    </div>
+                    {!n.read && <div style={{width:"7px",height:"7px",borderRadius:"50%",
+                      background:"var(--gold,#c9a84c)",flexShrink:0,marginTop:4}}/>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 🔍 BÚSQUEDA */}
+          <div style={{position:"relative"}} ref={searchRef}>
+            <div className="t-icon" style={{cursor:"pointer"}}
+              onClick={() => { openSearch(); setShowNotifs(false); setShowAvatar(false); }}>🔍</div>
+            {showSearch && (
+              <div style={{position:"absolute",top:"calc(100% + 10px)",right:0,
+                background:"var(--card-bg,#1a1a2e)",border:"1px solid var(--border,#2a2a3e)",
+                borderRadius:"10px",width:"280px",zIndex:999,boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}}>
+                <div style={{padding:"10px 12px",borderBottom:"1px solid var(--border,#2a2a3e)"}}>
+                  <input ref={searchInput} value={query} onChange={e => setQuery(e.target.value)}
+                    placeholder="Buscar proyectos, escenas, personajes..."
+                    style={{width:"100%",background:"transparent",border:"none",outline:"none",
+                      color:"var(--text,#e0e0e0)",fontSize:"13px"}}/>
+                </div>
+                {query.trim().length > 0 ? (
+                  <div style={{maxHeight:"220px",overflowY:"auto"}}>
+                    {results.length > 0 ? results.map((r,idx) => (
+                      <div key={idx}
+                        onClick={() => { setNav(r.nav); setShowSearch(false); setQuery(""); closeEditor(); }}
+                        style={{display:"flex",alignItems:"center",gap:"10px",
+                          padding:"10px 14px",cursor:"pointer",
+                          borderBottom:"1px solid var(--border,#2a2a3e)"}}
+                        onMouseEnter={e => e.currentTarget.style.background="rgba(201,168,76,0.08)"}
+                        onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                        <span style={{fontSize:"16px"}}>
+                          {r.type==="Proyecto"?"📁":r.type==="Escena"?"🎭":"👤"}
+                        </span>
+                        <div>
+                          <div style={{fontSize:"13px",color:"var(--text,#e0e0e0)"}}>{r.label}</div>
+                          <div style={{fontSize:"11px",color:"var(--muted,#888)"}}>{r.type}</div>
+                        </div>
+                      </div>
+                    )) : (
+                      <div style={{padding:"16px",textAlign:"center",color:"var(--muted,#888)",fontSize:"13px"}}>
+                        Sin resultados para "{query}"
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{padding:"14px 16px"}}>
+                    <div style={{fontSize:"11px",color:"var(--muted,#888)",marginBottom:8}}>Accesos rápidos</div>
+                    {["Proyectos","Escenas","Personajes"].map(s => (
+                      <div key={s}
+                        onClick={() => { setNav(s); setShowSearch(false); closeEditor(); }}
+                        style={{padding:"7px 0",cursor:"pointer",fontSize:"13px",
+                          color:"var(--text,#e0e0e0)",display:"flex",alignItems:"center",gap:8}}
+                        onMouseEnter={e => e.currentTarget.style.color="var(--gold,#c9a84c)"}
+                        onMouseLeave={e => e.currentTarget.style.color="var(--text,#e0e0e0)"}>
+                        {s==="Proyectos"?"📁":s==="Escenas"?"🎭":"👤"} {s}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 👤 AVATAR MENÚ */}
+          <div style={{position:"relative"}} ref={avatarRef}>
+            <div className="avatar" style={{cursor:"pointer"}}
+              onClick={() => { setShowAvatar(p=>!p); setShowNotifs(false); setShowSearch(false); }}>
+              {iniciales}
+            </div>
+            {showAvatar && (
+              <div style={{position:"absolute",top:"calc(100% + 10px)",right:0,
+                background:"var(--card-bg,#1a1a2e)",border:"1px solid var(--border,#2a2a3e)",
+                borderRadius:"10px",width:"220px",zIndex:999,
+                boxShadow:"0 8px 32px rgba(0,0,0,0.4)",overflow:"hidden"}}>
+                <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border,#2a2a3e)",
+                  background:"rgba(201,168,76,0.06)"}}>
+                  <div style={{fontWeight:700,fontSize:"14px",color:"var(--text,#e0e0e0)"}}>{usuario?.nombre||"Usuario"}</div>
+                  <div style={{fontSize:"11px",color:"var(--muted,#888)",marginTop:2}}>{usuario?.email||""}</div>
+                </div>
+                {[
+                  { icon:"👤", label:"Mi perfil",     action:() => { setShowPerfil(true); setShowAvatar(false); } },
+                  { icon:"⚙️", label:"Configuración", action:() => { setShowConfig(true); setShowAvatar(false); } },
+                  { icon:"❓", label:"Ayuda",          action:() => { setShowAyuda(true);  setShowAvatar(false); } },
+                ].map(item => (
+                  <div key={item.label} onClick={item.action}
+                    style={{display:"flex",alignItems:"center",gap:10,
+                      padding:"10px 16px",cursor:"pointer",fontSize:"13px",
+                      color:"var(--text,#e0e0e0)"}}
+                    onMouseEnter={e => e.currentTarget.style.background="rgba(201,168,76,0.08)"}
+                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    {item.icon} {item.label}
+                  </div>
+                ))}
+                <div style={{borderTop:"1px solid var(--border,#2a2a3e)"}}>
+                  <div onClick={onLogout}
+                    style={{display:"flex",alignItems:"center",gap:10,
+                      padding:"10px 16px",cursor:"pointer",fontSize:"13px",color:"#e05c5c"}}
+                    onMouseEnter={e => e.currentTarget.style.background="rgba(224,92,92,0.08)"}
+                    onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                    ⏻ Cerrar sesión
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -93,23 +359,23 @@ export default function Dashboard({ onLogout }) {
         <div className="sidebar-section">
           {NAV.map(item => (
             <button key={item.label}
-              className={`nav-btn ${!isEditor && nav===item.label ? "active" : ""}`}
+              className={`nav-btn ${!isEditor && nav===item.label ? "active":""}`}
               onClick={() => { setNav(item.label); closeEditor(); }}>
               <span className="ni">{item.icon}</span>{item.label}
             </button>
           ))}
         </div>
-        <div className="sidebar-gap" />
+        <div className="sidebar-gap"/>
         <div className="sidebar-foot">
-          <button className="nav-btn"><span className="ni">⚙️</span> Configuración</button>
-          <button className="nav-btn" onClick={onLogout}><span className="ni">⏻</span> Salir</button>
+          <button className="nav-btn" onClick={() => setShowConfig(true)}><span className="ni">⚙️</span>Configuración</button>
+          <button className="nav-btn" onClick={onLogout}><span className="ni">⏻</span>Salir</button>
         </div>
       </aside>
 
       {/* MAIN */}
       {isEditor ? (
         <main style={{overflow:"hidden",display:"flex",flexDirection:"column",background:"var(--ed-bg)",minHeight:0,height:"100%"}}>
-          <Editor key={edKey} initTitle={edData.title} initTemplate={edData.template} onBack={closeEditor} />
+          <Editor key={edKey} initTitle={edData.title} initTemplate={edData.template} onBack={closeEditor}/>
         </main>
       ) : (
         <main className="main">{renderView()}</main>
@@ -135,7 +401,8 @@ export default function Dashboard({ onLogout }) {
                   <div className="cl-role">{c.role}</div>
                 </div>
                 {!c.g && (
-                  <span style={{color:"var(--muted)",cursor:"pointer",fontSize:"16px"}} onClick={() => removeCollab(c.id)} title="Quitar">✕</span>
+                  <span style={{color:"var(--muted)",cursor:"pointer",fontSize:"16px"}}
+                    onClick={() => removeCollab(c.id)} title="Quitar">✕</span>
                 )}
               </div>
             ))}
@@ -161,6 +428,180 @@ export default function Dashboard({ onLogout }) {
         </aside>
       )}
 
+      {/* ── MODAL MI PERFIL ─────────────────────────────────────────────── */}
+      {showPerfil && (
+        <div style={modalOverlay} onClick={e => e.target===e.currentTarget && setShowPerfil(false)}>
+          <div style={modalBox}>
+            <div style={modalHead}>
+              <span style={modalTitle}>👤 Mi perfil</span>
+              <button style={closeBtn} onClick={() => setShowPerfil(false)}>✕</button>
+            </div>
+            <div style={{padding:"22px"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24}}>
+                <div style={{width:"72px",height:"72px",borderRadius:"50%",
+                  background:"var(--gold,#c9a84c)",color:"#000",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:"28px",fontWeight:700,marginBottom:10}}>
+                  {iniciales}
+                </div>
+                <div style={{fontSize:"12px",color:"var(--muted,#888)"}}>Foto de perfil (próximamente)</div>
+              </div>
+              {[
+                { label:"Nombre",             key:"nombre",   type:"text"     },
+                { label:"Correo electrónico", key:"email",    type:"email"    },
+                { label:"Rol en el proyecto", key:"rol",      type:"text"     },
+                { label:"Biografía",          key:"bio",      type:"textarea" },
+              ].map(f => (
+                <div key={f.key} style={{marginBottom:14}}>
+                  <label style={fieldLabel}>{f.label}</label>
+                  {f.type==="textarea" ? (
+                    <textarea value={perfilData[f.key]}
+                      onChange={e => setPerfilData(p=>({...p,[f.key]:e.target.value}))}
+                      rows={3} style={{...fieldInput,resize:"vertical"}}/>
+                  ) : (
+                    <input type={f.type} value={perfilData[f.key]}
+                      onChange={e => setPerfilData(p=>({...p,[f.key]:e.target.value}))}
+                      style={fieldInput}/>
+                  )}
+                </div>
+              ))}
+              <div style={{borderTop:"1px solid var(--border,#2a2a3e)",paddingTop:16,marginTop:4,marginBottom:14}}>
+                <div style={{fontSize:"12px",fontWeight:600,color:"var(--text,#e0e0e0)",marginBottom:12}}>
+                  Cambiar contraseña
+                </div>
+                {[
+                  { label:"Nueva contraseña",     key:"password"  },
+                  { label:"Confirmar contraseña", key:"password2" },
+                ].map(f => (
+                  <div key={f.key} style={{marginBottom:12}}>
+                    <label style={fieldLabel}>{f.label}</label>
+                    <input type="password" value={perfilData[f.key]}
+                      onChange={e => setPerfilData(p=>({...p,[f.key]:e.target.value}))}
+                      style={fieldInput}/>
+                  </div>
+                ))}
+              </div>
+              {perfilErr   && <div style={{fontSize:"12px",color:"#e05c5c",marginBottom:10}}>⚠ {perfilErr}</div>}
+              {perfilFlash && <div style={{fontSize:"12px",color:"#5ce07a",marginBottom:10}}>{perfilFlash}</div>}
+              <button onClick={savePerfil}
+                style={{width:"100%",padding:"10px",borderRadius:"8px",border:"none",
+                  background:"var(--gold,#c9a84c)",color:"#000",fontWeight:700,
+                  fontSize:"13px",cursor:"pointer"}}>
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL CONFIGURACIÓN ─────────────────────────────────────────── */}
+      {showConfig && (
+        <div style={modalOverlay} onClick={e => e.target===e.currentTarget && setShowConfig(false)}>
+          <div style={modalBox}>
+            <div style={modalHead}>
+              <span style={modalTitle}>⚙️ Configuración</span>
+              <button style={closeBtn} onClick={() => setShowConfig(false)}>✕</button>
+            </div>
+            <div style={{padding:"22px"}}>
+              <div style={{marginBottom:16}}>
+                <label style={fieldLabel}>Idioma</label>
+                <select value={config.idioma}
+                  onChange={e => setConfig(p=>({...p,idioma:e.target.value}))}
+                  style={{...fieldInput,cursor:"pointer"}}>
+                  {["Español","English","Français","Português"].map(l=>(
+                    <option key={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={fieldLabel}>Formato de guion</label>
+                <select value={config.formatoGuion}
+                  onChange={e => setConfig(p=>({...p,formatoGuion:e.target.value}))}
+                  style={{...fieldInput,cursor:"pointer"}}>
+                  {["Estándar Hollywood","Europeo","Documental","Serie TV"].map(f=>(
+                    <option key={f}>{f}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{marginBottom:20}}>
+                <label style={fieldLabel}>Privacidad del proyecto</label>
+                <select value={config.privacidad}
+                  onChange={e => setConfig(p=>({...p,privacidad:e.target.value}))}
+                  style={{...fieldInput,cursor:"pointer"}}>
+                  {["Solo yo","Solo equipo","Público"].map(p=>(
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{borderTop:"1px solid var(--border,#2a2a3e)",paddingTop:16}}>
+                <div style={{fontSize:"12px",fontWeight:600,color:"var(--text,#e0e0e0)",marginBottom:12}}>
+                  Notificaciones y guardado
+                </div>
+                {[
+                  { label:"Notificaciones por email", key:"notifEmail"   },
+                  { label:"Notificaciones push",      key:"notifPush"    },
+                  { label:"Autoguardado",             key:"autoguardado" },
+                ].map(t => (
+                  <div key={t.key} style={toggleRow}>
+                    <span style={{fontSize:"13px",color:"var(--text,#e0e0e0)"}}>{t.label}</span>
+                    <div onClick={() => setConfig(p=>({...p,[t.key]:!p[t.key]}))}
+                      style={{width:"42px",height:"24px",borderRadius:"12px",cursor:"pointer",
+                        background:config[t.key]?"var(--gold,#c9a84c)":"var(--border,#2a2a3e)",
+                        position:"relative",transition:"background 0.2s"}}>
+                      <div style={{position:"absolute",top:"3px",
+                        left:config[t.key]?"21px":"3px",
+                        width:"18px",height:"18px",borderRadius:"50%",
+                        background:"#fff",transition:"left 0.2s"}}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {configFlash && <div style={{fontSize:"12px",color:"#5ce07a",margin:"12px 0"}}>✓ {configFlash}</div>}
+              <button onClick={saveConfig}
+                style={{width:"100%",padding:"10px",borderRadius:"8px",border:"none",
+                  background:"var(--gold,#c9a84c)",color:"#000",fontWeight:700,
+                  fontSize:"13px",cursor:"pointer",marginTop:16}}>
+                Guardar configuración
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL AYUDA ─────────────────────────────────────────────────── */}
+      {showAyuda && (
+        <div style={modalOverlay} onClick={e => e.target===e.currentTarget && setShowAyuda(false)}>
+          <div style={modalBox}>
+            <div style={modalHead}>
+              <span style={modalTitle}>❓ Ayuda</span>
+              <button style={closeBtn} onClick={() => setShowAyuda(false)}>✕</button>
+            </div>
+            <div style={{padding:"22px"}}>
+              {[
+                { q:"¿Cómo creo un nuevo proyecto?",       a:"Ve a la sección Proyectos y haz clic en '+ Nuevo proyecto'." },
+                { q:"¿Cómo invito a un colaborador?",      a:"En el panel derecho encontrarás el botón 'Invitar colaborador'." },
+                { q:"¿Cómo uso el editor de guion?",       a:"Haz clic en cualquier proyecto o escena y se abrirá el editor." },
+                { q:"¿Puedo exportar mi guion?",           a:"Sí, dentro del editor encontrarás la opción de exportar en PDF o Final Draft." },
+                { q:"¿Cómo contacto al soporte?",         a:"Escríbenos al correo que aparece al final de esta sección." },
+              ].map((item,i) => (
+                <div key={i} style={{marginBottom:16,paddingBottom:16,
+                  borderBottom:i<4?"1px solid var(--border,#2a2a3e)":"none"}}>
+                  <div style={{fontWeight:600,fontSize:"13px",color:"var(--gold,#c9a84c)",marginBottom:6}}>{item.q}</div>
+                  <div style={{fontSize:"13px",color:"var(--text,#e0e0e0)",lineHeight:1.5}}>{item.a}</div>
+                </div>
+              ))}
+              <div style={{marginTop:8,padding:"12px",borderRadius:"8px",
+                background:"rgba(201,168,76,0.08)",border:"1px solid var(--border,#2a2a3e)"}}>
+                <div style={{fontSize:"12px",color:"var(--muted,#888)"}}>
+                  ¿Necesitas más ayuda? Escríbenos a{" "}
+                  <span style={{color:"var(--gold,#c9a84c)"}}>soporte@filmscript.com</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* INVITE MODAL */}
       {invModal && (
         <div className="inv-overlay" onClick={e => e.target===e.currentTarget && setInvModal(false)}>
@@ -168,15 +609,13 @@ export default function Dashboard({ onLogout }) {
             <button className="inv-close" onClick={() => setInvModal(false)}>✕</button>
             <div className="inv-title">Invitar colaborador</div>
             <div className="inv-sub">El colaborador recibirá un correo con acceso al proyecto.</div>
-
             <div style={{marginBottom:12}}>
               <div style={{fontSize:"11px",color:"var(--muted2)",marginBottom:5}}>Correo electrónico</div>
               <input className="inv-input" type="email" placeholder="colaborador@correo.com"
                 value={invEmail} onChange={e => { setInvEmail(e.target.value); setInvErr(""); }}
-                onKeyDown={e => e.key==="Enter" && sendInvite()} autoFocus />
+                onKeyDown={e => e.key==="Enter" && sendInvite()} autoFocus/>
               {invErr && <div style={{fontSize:"11px",color:"var(--red)",marginTop:4}}>⚠ {invErr}</div>}
             </div>
-
             <div style={{marginBottom:20}}>
               <div style={{fontSize:"11px",color:"var(--muted2)",marginBottom:5}}>Rol</div>
               <select className="inv-sel" value={invRole} onChange={e => setInvRole(e.target.value)}>
@@ -186,7 +625,6 @@ export default function Dashboard({ onLogout }) {
                 <option>Lector</option>
               </select>
             </div>
-
             <button className="btn-gold" style={{width:"100%",justifyContent:"center"}} onClick={sendInvite}>
               {invFlash ? "✓ Invitación enviada" : "📨 Enviar invitación"}
             </button>

@@ -28,7 +28,12 @@ export default function Login({ onLogin }) {
     try {
       // TODO: await fetch("/api/auth/login", ...)
       await new Promise(r => setTimeout(r, 800));
-      onLogin();
+
+      // Extrae el nombre del email
+      const nombreDeEmail = form.email.split("@")[0];
+      const nombre = nombreDeEmail.charAt(0).toUpperCase() + nombreDeEmail.slice(1);
+      onLogin({ nombre, email: form.email });
+
     } catch (err) {
       setApiErr(err.message || "Error al iniciar sesión.");
     } finally {

@@ -4,10 +4,11 @@ import Dashboard from "./pages/Dashboard";
 import "./styles/global.css";
 
 export default function App() {
-  const [page, setPage] = useState("auth");
+  const [page,    setPage]    = useState("auth");
+  const [usuario, setUsuario] = useState(null);
 
   if (page === "auth")
-    return <Auth onLogin={() => setPage("dashboard")} />;
+    return <Auth onLogin={(u) => { setUsuario(u); setPage("dashboard"); }} />;
 
-  return <Dashboard onLogout={() => setPage("auth")} />;
+  return <Dashboard usuario={usuario} onLogout={() => { setUsuario(null); setPage("auth"); }} />;
 }
