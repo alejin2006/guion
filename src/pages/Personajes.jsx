@@ -1,48 +1,80 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "../styles/Personajes.css";
 
-const INITIAL = [
-  { id:1, emoji:"🕵️", name:"Elena Vargas",  role:"Protagonista", project:"Sin Identidad",    scenes:14, desc:"Detective de 34 años, meticulosa y determinada. Oculta un secreto del pasado." },
-  { id:2, emoji:"🎭", name:"Marco Ruiz",    role:"Antagonista",  project:"Sin Identidad",    scenes:9,  desc:"Empresario corrupto. Carismático y manipulador." },
-  { id:3, emoji:"👩‍⚕️", name:"Sofía Mendez", role:"Secundario",   project:"La Última Ciudad", scenes:6,  desc:"Médica de urgencias. Testigo clave del incidente." },
-  { id:4, emoji:"👴", name:"Don Alberto",   role:"Secundario",   project:"El Caso Miró",     scenes:4,  desc:"Vecino de 70 años. Guarda silencio sobre lo que vio." },
-  { id:5, emoji:"🧑‍💻", name:"Nico Torres",  role:"Protagonista", project:"La Última Ciudad", scenes:11, desc:"Hacker autodidacta. Irreverente pero con brújula moral." },
-  { id:6, emoji:"👮", name:"Sgt. Herrera",  role:"Apoyo",        project:"Sin Identidad",    scenes:7,  desc:"Sargento veterano. Leal a Elena aunque no siempre de acuerdo." },
-];
+const ROLES  = ["Protagonista", "Antagonista", "Secundario", "Apoyo", "Extra"];
+const EMOJIS = ["👤","🕵️","🎭","👩‍⚕️","👴","🧑‍💻","👮","🦸","🧙","🎪","🧑‍🎨","🎬"];
+const EMPTY  = { emoji: "👤", name: "", role: "Protagonista", projectId: "", scenes: 0, desc: "" };
 
-const ROLES    = ["Protagonista","Antagonista","Secundario","Apoyo","Extra"];
-const PROJECTS = ["Sin Identidad","La Última Ciudad","El Caso Miró","Volver al Sur"];
-const EMOJIS   = ["🕵️","🎭","👩‍⚕️","👴","🧑‍💻","👮","🦸","🧙","👤","🎪","🧑‍🎨","🎬"];
+export default function Personajes({ projects = [] }) {
+  const [chars,   setChars]   = useState([]);
+  const [filter,  setFilter]  = useState("Todos");
+  const [loading, setLoading] = useState(true);
+  const [modal,   setModal]   = useState(null); // null | { mode: "view"|"edit"|"new", char? }
+  const [form,    setForm]    = useState(EMPTY);
+  const [errors,  setErrors]  = useState({});
 
-const EMPTY = { emoji:"👤", name:"", role:"Protagonista", project:"Sin Identidad", scenes:0, desc:"" };
+  useEffect(() => {
+    // TODO: GET /api/characters
+    // const res  = await fetch("/api/characters");
+    // const data = await res.json();
+    // setChars(data);
+    setLoading(false);
+  }, []);
 
-export default function Personajes() {
-  const [chars,  setChars]  = useState(INITIAL);
-  const [filter, setFilter] = useState("Todos");
-  const [modal,  setModal]  = useState(null); // null | { mode:"view"|"edit"|"new", char }
-  const [form,   setForm]   = useState(EMPTY);
+  // Proyectos disponibles: prop o inferidos de personajes cargados
+  const projectList = projects.length > 0
+    ? projects
+    : [...new Map(chars.map(c => [c.projectId, c.projectName])).entries()]
+        .map(([id, name]) => ({ id, name }));
 
-  const projs = ["Todos", ...new Set(chars.map(c => c.project))];
-  const list  = filter === "Todos" ? chars : chars.filter(c => c.project === filter);
+  const filterOpts = ["Todos", ...projectList.map(p => p.name)];
+  const list = filter === "Todos"
+    ? chars
+    : chars.filter(c => c.projectName === filter);
 
-  const openView = c  => { setModal({ mode:"view", char:c }); };
-  const openNew  = () => { setForm({...EMPTY}); setModal({ mode:"new" }); };
-  const openEdit = c  => { setForm({...c});     setModal({ mode:"edit", char:c }); };
-  const closeModal   = () => setModal(null);
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: "" })); };
 
-  const save = () => {
-    if (!form.name.trim()) return;
-    if (modal.mode === "new") {
-      setChars(prev => [...prev, { ...form, id: Date.now(), scenes: Number(form.scenes)||0 }]);
-    } else {
-      setChars(prev => prev.map(c => c.id === modal.char.id ? { ...c, ...form, scenes: Number(form.scenes)||0 } : c));
-    }
-    closeModal();
+  const openView = c  => setModal({ mode: "view", char: c });
+  const openNew  = () => { setForm({ ...EMPTY }); setErrors({}); setModal({ mode: "new" }); };
+  const openEdit = c  => { setForm({ ...c }); setErrors({}); setModal({ mode: "edit", char: c }); };
+  const close    = () => setModal(null);
+
+  const validate = () => {
+    const e = {};
+    if (!form.name.trim())  e.name      = "El nombre es obligatorio.";
+    if (!form.projectId)    e.projectId = "Selecciona un proyecto.";
+    return e;
   };
 
-  const remove = id => { setChars(prev => prev.filter(c => c.id !== id)); closeModal(); };
+  const save = async () => {
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+    const payload = { ...form, scenes: Number(form.scenes) || 0 };
+    const projName = projectList.find(p => p.id === form.projectId)?.name || "";
+
+    if (modal.mode === "new") {
+      // TODO: POST /api/characters
+      // const res  = await fetch("/api/characters", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+      // const data = await res.json();
+      // setChars(prev => [...prev, data]);
+      setChars(prev => [...prev, { ...payload, id: Date.now(), projectName: projName }]);
+    } else {
+      // TODO: PUT /api/characters/:id
+      // await fetch(`/api/characters/${modal.char.id}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+      setChars(prev => prev.map(c =>
+        c.id === modal.char.id ? { ...c, ...payload, projectName: projName } : c
+      ));
+    }
+    close();
+  };
+
+  const remove = async (id) => {
+    // TODO: DELETE /api/characters/:id
+    // await fetch(`/api/characters/${id}`, { method: "DELETE" });
+    setChars(prev => prev.filter(c => c.id !== id));
+    close();
+  };
 
   return (
     <>
@@ -50,31 +82,44 @@ export default function Personajes() {
       <div className="page-sub">Ficha de cada personaje de tus guiones.</div>
 
       <div className="fbar">
-        {projs.map(p => (
-          <button key={p} className={`fbtn ${filter===p?"on":""}`} onClick={() => setFilter(p)}>{p}</button>
+        {filterOpts.map(p => (
+          <button key={p} className={`fbtn ${filter === p ? "on" : ""}`}
+            onClick={() => setFilter(p)}>{p}</button>
         ))}
-        <div style={{marginLeft:"auto"}}>
+        <div style={{ marginLeft: "auto" }}>
           <button className="btn-gold sm" onClick={openNew}>＋ Nuevo personaje</button>
         </div>
       </div>
 
-      <div className="ch-grid">
-        {list.map(c => (
-          <div className="ch-card" key={c.id} onClick={() => openView(c)}>
-            <div className="ch-av">{c.emoji}</div>
-            <div className="ch-name">{c.name}</div>
-            <div className="ch-role">{c.role}</div>
-            <div className="ch-desc">{c.desc}</div>
-            <div className="ch-meta">🎭 {c.scenes} escenas · 📁 {c.project}</div>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="empty-state">Cargando personajes…</div>
+      ) : list.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">🎭</div>
+          <div className="empty-title">Sin personajes todavía</div>
+          <div className="empty-sub">Agrega los personajes de tu guión.</div>
+          <button className="btn-gold sm" onClick={openNew}>＋ Nuevo personaje</button>
+        </div>
+      ) : (
+        <div className="ch-grid">
+          {list.map(c => (
+            <div className="ch-card" key={c.id} onClick={() => openView(c)}>
+              <div className="ch-av">{c.emoji}</div>
+              <div className="ch-name">{c.name}</div>
+              <div className="ch-role">{c.role}</div>
+              <div className="ch-desc">{c.desc}</div>
+              <div className="ch-meta">🎭 {c.scenes} escenas · 📁 {c.projectName}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* MODAL */}
+      {/* ── Modal ── */}
       {modal && (
-        <div className="ch-modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
+        <div className="ch-modal-overlay"
+          onClick={e => e.target === e.currentTarget && close()}>
           <div className="ch-modal">
-            <button className="ch-modal-close" onClick={closeModal}>✕</button>
+            <button className="ch-modal-close" onClick={close}>✕</button>
 
             {modal.mode === "view" ? (
               <>
@@ -82,7 +127,9 @@ export default function Personajes() {
                 <div className="ch-modal-name">{modal.char.name}</div>
                 <div className="ch-modal-role">{modal.char.role}</div>
                 <div className="ch-modal-desc">{modal.char.desc}</div>
-                <div className="ch-modal-meta">🎭 {modal.char.scenes} escenas &nbsp;·&nbsp; 📁 {modal.char.project}</div>
+                <div className="ch-modal-meta">
+                  🎭 {modal.char.scenes} escenas &nbsp;·&nbsp; 📁 {modal.char.projectName}
+                </div>
                 <div className="ch-modal-acts">
                   <button className="btn-gold sm" onClick={() => openEdit(modal.char)}>✏ Editar</button>
                   <button className="btn-red" onClick={() => remove(modal.char.id)}>🗑 Eliminar</button>
@@ -90,42 +137,71 @@ export default function Personajes() {
               </>
             ) : (
               <>
-                <div className="ch-modal-name" style={{marginBottom:16}}>{modal.mode==="new"?"Nuevo personaje":"Editar personaje"}</div>
+                <div className="ch-modal-name" style={{ marginBottom: 16 }}>
+                  {modal.mode === "new" ? "Nuevo personaje" : "Editar personaje"}
+                </div>
 
+                {/* Emoji picker */}
                 <div className="ch-form-row">
-                  <div style={{fontSize:"11px",color:"var(--muted2)",marginBottom:5}}>Emoji</div>
+                  <div style={{ fontSize: "11px", color: "var(--muted2)", marginBottom: 5 }}>Avatar</div>
                   <div className="ch-emoji-grid">
                     {EMOJIS.map(e => (
-                      <button key={e} className={`ch-emoji-btn ${form.emoji===e?"on":""}`} onClick={() => set("emoji",e)}>{e}</button>
+                      <button key={e}
+                        className={`ch-emoji-btn ${form.emoji === e ? "on" : ""}`}
+                        onClick={() => set("emoji", e)}>{e}</button>
                     ))}
                   </div>
                 </div>
 
-                {[["Nombre","name","text","Nombre del personaje"],["Descripción","desc","text","Breve descripción..."]].map(([lbl,key,type,ph]) => (
-                  <div className="ch-form-row" key={key}>
-                    <div style={{fontSize:"11px",color:"var(--muted2)",marginBottom:5}}>{lbl}</div>
-                    <input className="ch-form-input" type={type} placeholder={ph} value={form[key]} onChange={e => set(key,e.target.value)} />
-                  </div>
-                ))}
+                {/* Nombre */}
+                <div className="ch-form-row">
+                  <div style={{ fontSize: "11px", color: "var(--muted2)", marginBottom: 5 }}>Nombre</div>
+                  <input className={`ch-form-input ${errors.name ? "sc-input-err" : ""}`}
+                    placeholder="Nombre del personaje"
+                    value={form.name}
+                    onChange={e => set("name", e.target.value)} />
+                  {errors.name && <div className="sc-field-err">⚠ {errors.name}</div>}
+                </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {/* Descripción */}
+                <div className="ch-form-row">
+                  <div style={{ fontSize: "11px", color: "var(--muted2)", marginBottom: 5 }}>Descripción</div>
+                  <textarea className="ch-form-input"
+                    placeholder="Breve descripción del personaje…"
+                    rows={3}
+                    value={form.desc}
+                    onChange={e => set("desc", e.target.value)}
+                    style={{ resize: "vertical", fontFamily: "inherit" }} />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {/* Rol */}
                   <div className="ch-form-row">
-                    <div style={{fontSize:"11px",color:"var(--muted2)",marginBottom:5}}>Rol</div>
-                    <select className="ch-form-sel" value={form.role} onChange={e => set("role",e.target.value)}>
+                    <div style={{ fontSize: "11px", color: "var(--muted2)", marginBottom: 5 }}>Rol</div>
+                    <select className="ch-form-sel" value={form.role}
+                      onChange={e => set("role", e.target.value)}>
                       {ROLES.map(r => <option key={r}>{r}</option>)}
                     </select>
                   </div>
+
+                  {/* Proyecto */}
                   <div className="ch-form-row">
-                    <div style={{fontSize:"11px",color:"var(--muted2)",marginBottom:5}}>Proyecto</div>
-                    <select className="ch-form-sel" value={form.project} onChange={e => set("project",e.target.value)}>
-                      {PROJECTS.map(p => <option key={p}>{p}</option>)}
+                    <div style={{ fontSize: "11px", color: "var(--muted2)", marginBottom: 5 }}>Proyecto</div>
+                    <select className={`ch-form-sel ${errors.projectId ? "sc-input-err" : ""}`}
+                      value={form.projectId}
+                      onChange={e => set("projectId", e.target.value)}>
+                      <option value="">— Seleccionar —</option>
+                      {projectList.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
                     </select>
+                    {errors.projectId && <div className="sc-field-err">⚠ {errors.projectId}</div>}
                   </div>
                 </div>
 
                 <div className="ch-modal-acts">
                   <button className="btn-gold sm" onClick={save}>💾 Guardar</button>
-                  <button className="btn-outline" onClick={closeModal}>Cancelar</button>
+                  <button className="btn-outline" onClick={close}>Cancelar</button>
                 </div>
               </>
             )}
